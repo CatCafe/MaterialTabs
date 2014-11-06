@@ -1,12 +1,9 @@
 package tw.catcafe.materialtabs;
 
 import android.content.Context;
-import android.graphics.Point;
-import android.support.v4.view.ViewPager;
 import android.util.AttributeSet;
-import android.view.Display;
+import android.util.Log;
 import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.widget.HorizontalScrollView;
 import android.widget.RelativeLayout;
 
@@ -16,7 +13,6 @@ import android.widget.RelativeLayout;
 public class ScrollableTabLayout extends TabLayout {
     private RelativeLayout mMasterLayout;
     private HorizontalScrollView mHorizontalScrollView;
-    private ViewPager.OnPageChangeListener mHostViewPagerPageChangeListener;
     public ScrollableTabLayout(Context context) {
         this(context, null);
     }
@@ -28,7 +24,7 @@ public class ScrollableTabLayout extends TabLayout {
     public ScrollableTabLayout(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
 
-        mViewPagerPageChangeListener = new InternelViewPagerPageChangeListener();
+        this.mIndicatorMoveListener = new InternalIndicatorMoveListener();
     }
 
     private HorizontalScrollView getHorizontalScrollView() {
@@ -60,35 +56,48 @@ public class ScrollableTabLayout extends TabLayout {
                 ViewGroup.LayoutParams.MATCH_PARENT);
     }
 
-    @Override
-    public void setOnPageChangeListener(ViewPager.OnPageChangeListener listener) {
-        // Because we want to scroll to tab automatically ,
-        // we have to wrap mViewPagerPageChangeListener here.
-        mHostViewPagerPageChangeListener = listener;
-    }
-
-    private class InternelViewPagerPageChangeListener implements ViewPager.OnPageChangeListener {
-        @Override
-        public void onPageScrolled(int position, float positionOffset, int positionOffsetPixel) {
-
-            if (mHostViewPagerPageChangeListener != null) {
-                mHostViewPagerPageChangeListener.onPageScrolled(position,
-                        positionOffset, positionOffsetPixel);
-            }
-        }
+    private class InternalIndicatorMoveListener implements OnIndicatorMoveListener {
+        private int mLastIndicatorPosition;
+        private int mScrollStartAtMiddlePosition = -1;
 
         @Override
-        public void onPageSelected(int position) {
-            if (mHostViewPagerPageChangeListener != null) {
-                mHostViewPagerPageChangeListener.onPageSelected(position);
-            }
-        }
+        public void OnIndicatorMove(int left, int right, int leftTabMiddle, int rightTabMiddle, boolean manually) {
+            final int padding = getResources().getDimensionPixelSize(R.dimen.material_scrollable_tab_padding);
+            final int indicatorMiddlePosition = (right + left) / 2;
+            final int scrollWidth = mHorizontalScrollView.getWidth();
+            int middlePosition = indicatorMiddlePosition;
 
-        @Override
-        public void onPageScrollStateChanged(int state) {
-            if (mHostViewPagerPageChangeListener != null) {
-                mHostViewPagerPageChangeListener.onPageScrollStateChanged(state);
+            if (!manually) {
+                // If not manually sliding, we want to scroll swiftly.
+                if (mLastIndicatorPosition == indicatorMiddlePosition) // not yet moved
+                    return;
+                if (mScrollStartAtMiddlePosition == -1)
+                    mScrollStartAtMiddlePosition = mHorizontalScrollView.getScrollX() - padding + scrollWidth / 2;
+
+                final int movementRoadWidth = rightTabMiddle - leftTabMiddle;
+                boolean movingRight = mLastIndicatorPosition < indicatorMiddlePosition;
+
+                float indicatorMoveProgress = 1.0f *
+                        (indicatorMiddlePosition - leftTabMiddle) / movementRoadWidth;
+                if (movingRight) {
+                    middlePosition = (int) (
+                            mScrollStartAtMiddlePosition * (1.0f - indicatorMoveProgress) +
+                            rightTabMiddle * indicatorMoveProgress
+                    );
+                } else {
+                    indicatorMoveProgress = 1.0f - indicatorMoveProgress;
+                    middlePosition = (int) (
+                            mScrollStartAtMiddlePosition * (1.0f - indicatorMoveProgress) +
+                            leftTabMiddle * indicatorMoveProgress
+                    );
+                }
             }
+
+            if (leftTabMiddle == rightTabMiddle || manually) // Movement completed
+                mScrollStartAtMiddlePosition = -1;
+
+            mLastIndicatorPosition = indicatorMiddlePosition;
+            mHorizontalScrollView.scrollTo(middlePosition + padding - scrollWidth / 2, 0);
         }
     }
 }

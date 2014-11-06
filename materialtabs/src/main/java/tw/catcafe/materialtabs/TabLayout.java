@@ -2,14 +2,9 @@ package tw.catcafe.materialtabs;
 
 import android.content.Context;
 import android.content.res.Resources;
-import android.content.res.TypedArray;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
-import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -20,14 +15,12 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.Scroller;
-import android.widget.TableLayout;
 import android.widget.TextView;
 
 import java.lang.reflect.Field;
 import java.util.LinkedList;
 import java.util.List;
 
-import at.markushi.ui.RevealColorView;
 import at.markushi.ui.util.BakedBezierInterpolator;
 
 /**
@@ -43,6 +36,7 @@ public abstract class TabLayout extends RelativeLayout {
     protected List<TabTouchListener> mTabsList;
     protected ViewPager mViewPager;
     protected ViewPager.OnPageChangeListener mViewPagerPageChangeListener;
+    protected OnIndicatorMoveListener mIndicatorMoveListener;
 
     public TabLayout(Context context) {
         this(context, null);
@@ -223,23 +217,26 @@ public abstract class TabLayout extends RelativeLayout {
         }
     }
 
-    protected void updateIndicator(int leftPosition, int rightPosition, float offset) {
+    protected void updateIndicator(int leftPosition, int rightPosition, float offset, boolean manually) {
         final int tabCount = mLinearTabLayout.getChildCount();
         final int indicatorHeight = getResources().getDimensionPixelSize(R.dimen.material_tab_indicator_height);
 
         // Thick colored underline below the current selection
         if (tabCount > 0) {
             View leftTab = mLinearTabLayout.getChildAt(leftPosition);
+            int leftTabMiddle = (leftTab.getLeft() + leftTab.getRight()) / 2;
+            int rightTabMiddle = leftTabMiddle;
             int indicatorLeft = leftTab.getLeft();
             int indicatorRight = leftTab.getRight();
 
-            if (leftPosition != rightPosition) { // We are moving!
+            if (leftPosition != rightPosition && rightPosition < tabCount) { // We are moving!
                 View rightTab = mLinearTabLayout.getChildAt(rightPosition);
+                rightTabMiddle = (rightTab.getLeft() + rightTab.getRight()) / 2;
                 // Use Bezier line to match Lollipop effect
                 float swift = BakedBezierInterpolator.getInstance().getInterpolation(offset);
                 float swiftOut = 1.0f - BakedBezierInterpolator.getInstance().getInterpolation(1.0f - offset);
                 indicatorLeft = Math.max(
-                        (int)(swiftOut * rightTab.getLeft()  + (1.0f - swiftOut) * leftTab.getLeft()),
+                        (int)(swiftOut * rightTab.getLeft() + (1.0f - swiftOut) * leftTab.getLeft()),
                         leftTab.getLeft()
                 );
                 indicatorRight = Math.min(
@@ -252,6 +249,10 @@ public abstract class TabLayout extends RelativeLayout {
             mIndicatorView.setTranslationY(getHeight() - indicatorHeight);
             mIndicatorView.setLayoutParams(new RelativeLayout.LayoutParams(
                     indicatorRight - indicatorLeft, indicatorHeight));
+
+            if (mIndicatorMoveListener != null)
+                mIndicatorMoveListener.OnIndicatorMove(indicatorLeft, indicatorRight,
+                        leftTabMiddle, rightTabMiddle, manually);
         } else {
             mIndicatorView.setLayoutParams(new RelativeLayout.LayoutParams(0, 0));
         }
@@ -317,7 +318,7 @@ public abstract class TabLayout extends RelativeLayout {
                 progress = ((position - left) * 1.0f + positionOffset) / (right - left);
             }
 
-            updateIndicator(left, right, progress);
+            updateIndicator(left, right, progress, mSlidingMode == 1);
 
             if (mViewPagerPageChangeListener != null) {
                 mViewPagerPageChangeListener.onPageScrolled(
@@ -333,7 +334,8 @@ public abstract class TabLayout extends RelativeLayout {
             switch (state) {
                 case ViewPager.SCROLL_STATE_IDLE:
                     mSlidingMode = 0;
-                    updateIndicator(mViewPager.getCurrentItem(), mViewPager.getCurrentItem(), 0.0f);
+                    updateIndicator(mViewPager.getCurrentItem(), mViewPager.getCurrentItem(),
+                            0.0f, true);
                     mLastPosition = mViewPager.getCurrentItem();
                     break;
                 case ViewPager.SCROLL_STATE_DRAGGING:
