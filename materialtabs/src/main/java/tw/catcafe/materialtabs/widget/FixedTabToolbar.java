@@ -1,12 +1,13 @@
 package tw.catcafe.materialtabs.widget;
 
 import android.content.Context;
+import android.content.res.TypedArray;
 import android.support.v4.view.ViewPager;
 import android.support.v7.widget.Toolbar;
 import android.util.AttributeSet;
 
 import tw.catcafe.materialtabs.FixedTabLayout;
-import tw.catcafe.materialtabs.TabItem;
+import tw.catcafe.materialtabs.R;
 
 /**
  * Created by Davy on 14/11/5.
@@ -25,10 +26,23 @@ public class FixedTabToolbar extends Toolbar {
     public FixedTabToolbar(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
 
+        // get attributes
+        boolean iconMode = false;
+        if (attrs != null) {
+            TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.FixedTabToolbar, 0, 0);
+            try {
+                iconMode = a.getBoolean(R.styleable.FixedTabToolbar_iconMode, false);
+            } finally {
+                a.recycle();
+            }
+        }
+
         // remove padding left / right
         setContentInsetsRelative(0, 0);
 
         mFixedTabLayout = new FixedTabLayout(context);
+        mFixedTabLayout.setIconMode(iconMode);
+        setBackgroundColor(mFixedTabLayout.getPrimaryColor());
 
         addView(
                 mFixedTabLayout,
@@ -39,16 +53,9 @@ public class FixedTabToolbar extends Toolbar {
         );
     }
 
-    public FixedTabToolbar addTab(TabItem tabItem) {
-        mFixedTabLayout.addTab(tabItem);
-        return this;
-    }
+    public boolean getIconMode() { return mFixedTabLayout.getIconMode(); }
 
     public void setViewPager(ViewPager viewPager) {
         mFixedTabLayout.setViewPager(viewPager);
-    }
-
-    public TabItem newTab() {
-        return mFixedTabLayout.newTab();
     }
 }

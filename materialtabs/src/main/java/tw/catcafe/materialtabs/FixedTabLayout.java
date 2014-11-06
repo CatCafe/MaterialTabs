@@ -25,24 +25,10 @@ public class FixedTabLayout extends TabLayout {
     }
 
     @Override
-    public void addTab(TabItem tab) {
-        if (mTabsList.size() == 3) // full
-            throw new RuntimeException("Number of tab is max to 3.");
-
-        styleTab(tab);
-
-        tab.setPosition(mTabsList.size());
-        tab.setTabListener(this);
-        mTabsList.add(tab);
-        if (mTabsList.size() == 1) // the only one
-            tab.activate();
-
-        // get the tab width
-        int tabWidth = getScreenWidth() / 3; // in spec, it's 1/3 of screen
-        ViewGroup.LayoutParams layoutParams = new ViewGroup.LayoutParams(
-                tabWidth,
+    protected ViewGroup.LayoutParams createLayoutParams() {
+        return new ViewGroup.LayoutParams(
+                getScreenWidth() / 3,// in spec, it's 1/3 of screen
                 ViewGroup.LayoutParams.MATCH_PARENT);
-        addView(tab.getView(), layoutParams);
     }
 
     private int getScreenWidth() {
