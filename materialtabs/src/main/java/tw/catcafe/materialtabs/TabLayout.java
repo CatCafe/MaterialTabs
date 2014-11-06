@@ -3,16 +3,20 @@ package tw.catcafe.materialtabs;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.res.TypedArray;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 import android.widget.TableLayout;
 import android.widget.TextView;
 
@@ -24,7 +28,9 @@ import at.markushi.ui.RevealColorView;
 /**
  * Created by Davy on 14/11/5.
  */
-public abstract class TabLayout extends LinearLayout {
+public abstract class TabLayout extends RelativeLayout {
+    protected LinearLayout mLinearTabLayout;
+    protected View mIndicatorView;
     protected int mPrimaryColor;
     protected int mAccentColor;
     protected int mColor;
@@ -51,6 +57,28 @@ public abstract class TabLayout extends LinearLayout {
 
         // initialize tabs list
         mTabsList = new LinkedList<TabTouchListener>();
+
+        mLinearTabLayout = new LinearLayout(context);
+        this.addView(
+                mLinearTabLayout,
+                new RelativeLayout.LayoutParams(
+                        RelativeLayout.LayoutParams.MATCH_PARENT,
+                        RelativeLayout.LayoutParams.MATCH_PARENT
+                )
+        );
+
+        mIndicatorView = new View(context);
+        mIndicatorView.setBackgroundColor(getAccentColor());
+        mIndicatorView.setOnTouchListener(new OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                return false;
+            }
+        });
+        this.addView(
+                mIndicatorView,
+                new RelativeLayout.LayoutParams(0, 0)
+        );
     }
 
     protected void extractColorsFromTheme() {
@@ -124,7 +152,7 @@ public abstract class TabLayout extends LinearLayout {
         final FragmentPagerAdapter adapter = (FragmentPagerAdapter)mViewPager.getAdapter();
         final ViewGroup.LayoutParams layoutParams = createLayoutParams();
 
-        this.removeAllViews();
+        mLinearTabLayout.removeAllViews();
         for (int i = 0; i < adapter.getCount(); i++) {
             // Create tab view here
             View tabView;
@@ -139,7 +167,7 @@ public abstract class TabLayout extends LinearLayout {
 
             tabView.setOnTouchListener(new InternalTabTouchListener());
 
-            this.addView(tabView, layoutParams);
+            mLinearTabLayout.addView(tabView, layoutParams);
             updateTabStyle(i);
         }
     }
@@ -150,7 +178,7 @@ public abstract class TabLayout extends LinearLayout {
     }
 
     protected void updateTabStyle(int i) {
-        View tabView = this.getChildAt(i);
+        View tabView = mLinearTabLayout.getChildAt(i);
         int textColor, iconAlpha;
 
         if (i == mViewPager.getCurrentItem()) { // set 100% alpha
@@ -168,16 +196,51 @@ public abstract class TabLayout extends LinearLayout {
         }
     }
 
+    protected void updateIndicator(int position, float offset) {
+        final int tabCount = mLinearTabLayout.getChildCount();
+        final int indicatorHeight = getResources().getDimensionPixelSize(R.dimen.material_tab_indicator_height);
+
+        // Thick colored underline below the current selection
+        if (tabCount > 0) {
+            View selectedTab = mLinearTabLayout.getChildAt(position);
+            int left = selectedTab.getLeft();
+            int right = selectedTab.getRight();
+
+            if (offset > 0f && position < (tabCount - 1)) {
+                // Draw the selection partway between the tabs
+                View nextTab = mLinearTabLayout.getChildAt(position + 1);
+                left = (int) (offset * nextTab.getLeft() +
+                        (1.0f - offset) * left);
+                right = (int) (offset * nextTab.getRight() +
+                        (1.0f - offset) * right);
+            }
+
+            mIndicatorView.setTranslationX(left);
+            mIndicatorView.setTranslationY(getHeight() - indicatorHeight);
+            mIndicatorView.setLayoutParams(new RelativeLayout.LayoutParams(right - left, indicatorHeight));
+        } else {
+            mIndicatorView.setLayoutParams(new RelativeLayout.LayoutParams(0, 0));
+        }
+    }
+
     /**
      * Listeners here.
      * Inner class can access parent members directly and make parent simply.
      */
 
     private class InternalViewPagerListener implements ViewPager.OnPageChangeListener {
-        int mLastPosition;
+        private int mLastPosition;
+        private int mScrollState;
 
         @Override
         public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
+            int tabCount = getChildCount();
+            if ((tabCount == 0) || (position < 0) || (position >= tabCount)) {
+                return;
+            }
+
+            updateIndicator(position, positionOffset);
+
             if (mViewPagerPageChangeListener != null) {
                 mViewPagerPageChangeListener.onPageScrolled(
                         position,
@@ -189,6 +252,8 @@ public abstract class TabLayout extends LinearLayout {
 
         @Override
         public void onPageScrollStateChanged(int state) {
+            mScrollState = state;
+
             if (mViewPagerPageChangeListener != null) {
                 mViewPagerPageChangeListener.onPageScrollStateChanged(state);
             }
@@ -196,6 +261,10 @@ public abstract class TabLayout extends LinearLayout {
 
         @Override
         public void onPageSelected(int position) {
+            if (mScrollState == ViewPager.SCROLL_STATE_IDLE) {
+                updateIndicator(position, 0.0f);
+            }
+
             updateTabStyle(mLastPosition);
             updateTabStyle(position);
             mLastPosition = position;
@@ -224,7 +293,7 @@ public abstract class TabLayout extends LinearLayout {
 
         @Override
         protected void onTabActive(View tabView) {
-            int i = indexOfChild(tabView);
+            int i = mLinearTabLayout.indexOfChild(tabView);
             if (i >= 0) {
                 mViewPager.setCurrentItem(i);
             } else {

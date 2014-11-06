@@ -1,18 +1,20 @@
 package tw.catcafe.materialtabs.widget;
 
 import android.content.Context;
-import android.content.res.TypedArray;
 import android.support.v4.view.ViewPager;
-import android.support.v7.widget.Toolbar;
 import android.util.AttributeSet;
+import android.view.ViewGroup;
+import android.widget.LinearLayout;
 
 import tw.catcafe.materialtabs.FixedTabLayout;
-import tw.catcafe.materialtabs.R;
+import tw.catcafe.materialtabs.TabLayout;
+import tw.catcafe.materialtabs.TabToolbar;
 
 /**
  * Created by Davy on 14/11/5.
  */
-public class FixedTabToolbar extends Toolbar {
+public class FixedTabToolbar extends TabToolbar {
+    private LinearLayout mLayout;
     private FixedTabLayout mFixedTabLayout;
 
     public FixedTabToolbar(Context context) {
@@ -25,32 +27,23 @@ public class FixedTabToolbar extends Toolbar {
 
     public FixedTabToolbar(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+    }
 
-        // get attributes
-        boolean iconMode = false;
-        if (attrs != null) {
-            TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.FixedTabToolbar, 0, 0);
-            try {
-                iconMode = a.getBoolean(R.styleable.FixedTabToolbar_iconMode, false);
-            } finally {
-                a.recycle();
-            }
+    @Override
+    protected ViewGroup getLayout() {
+        if (mLayout == null) {
+            mLayout = new LinearLayout(getContext());
+            mLayout.addView(getTabLayout(), LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
         }
+        return mLayout;
+    }
 
-        // remove padding left / right
-        setContentInsetsRelative(0, 0);
-
-        mFixedTabLayout = new FixedTabLayout(context);
-        mFixedTabLayout.setIconMode(iconMode);
-        setBackgroundColor(mFixedTabLayout.getPrimaryColor());
-
-        addView(
-                mFixedTabLayout,
-                new Toolbar.LayoutParams(
-                        Toolbar.LayoutParams.MATCH_PARENT,
-                        Toolbar.LayoutParams.MATCH_PARENT
-                )
-        );
+    @Override
+    protected TabLayout getTabLayout() {
+        if (mFixedTabLayout == null) {
+            mFixedTabLayout = new FixedTabLayout(getContext());
+        }
+        return mFixedTabLayout;
     }
 
     public boolean getIconMode() { return mFixedTabLayout.getIconMode(); }
