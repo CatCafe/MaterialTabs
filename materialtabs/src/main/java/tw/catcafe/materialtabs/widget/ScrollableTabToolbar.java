@@ -5,26 +5,26 @@ import android.util.AttributeSet;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 
-import tw.catcafe.materialtabs.FixedTabLayout;
+import tw.catcafe.materialtabs.ScrollableTabLayout;
 import tw.catcafe.materialtabs.TabLayout;
 import tw.catcafe.materialtabs.TabToolbar;
 
 /**
  * Created by Davy on 14/11/5.
  */
-public class FixedTabToolbar extends TabToolbar {
+public class ScrollableTabToolbar extends TabToolbar {
     private LinearLayout mLayout;
-    private FixedTabLayout mFixedTabLayout;
+    private ScrollableTabLayout mScrollableTabLayout;
 
-    public FixedTabToolbar(Context context) {
+    public ScrollableTabToolbar(Context context) {
         this(context, null);
     }
 
-    public FixedTabToolbar(Context context, AttributeSet attrs) {
+    public ScrollableTabToolbar(Context context, AttributeSet attrs) {
         this(context, attrs, 0);
     }
 
-    public FixedTabToolbar(Context context, AttributeSet attrs, int defStyleAttr) {
+    public ScrollableTabToolbar(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
     }
 
@@ -39,9 +39,9 @@ public class FixedTabToolbar extends TabToolbar {
 
     @Override
     protected TabLayout getTabLayout() {
-        if (mFixedTabLayout == null) {
-            mFixedTabLayout = new FixedTabLayout(getContext());
+        if (mScrollableTabLayout == null) {
+            mScrollableTabLayout = new ScrollableTabLayout(getContext());
         }
-        return mFixedTabLayout;
+        return mScrollableTabLayout;
     }
 }

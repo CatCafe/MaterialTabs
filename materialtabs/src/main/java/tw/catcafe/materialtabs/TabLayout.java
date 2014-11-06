@@ -63,28 +63,10 @@ public abstract class TabLayout extends RelativeLayout {
         // initialize tabs list
         mTabsList = new LinkedList<TabTouchListener>();
 
-        mLinearTabLayout = new LinearLayout(context);
-        this.addView(
-                mLinearTabLayout,
-                new RelativeLayout.LayoutParams(
-                        RelativeLayout.LayoutParams.MATCH_PARENT,
-                        RelativeLayout.LayoutParams.MATCH_PARENT
-                )
-        );
-
-        mIndicatorView = new View(context);
-        mIndicatorView.setBackgroundColor(getAccentColor());
-        mIndicatorView.setOnTouchListener(new OnTouchListener() {
-            @Override
-            public boolean onTouch(View view, MotionEvent motionEvent) {
-                return false;
-            }
-        });
-        this.addView(
-                mIndicatorView,
-                new RelativeLayout.LayoutParams(0, 0)
-        );
+        initLayouts();
     }
+
+    protected ViewGroup getMasterLayout() { return this; }
 
     protected void extractColorsFromTheme() {
         Resources.Theme theme = getContext().getTheme();
@@ -95,6 +77,30 @@ public abstract class TabLayout extends RelativeLayout {
         mAccentColor = typedValue.data;
         theme.resolveAttribute(R.attr.actionMenuTextColor, typedValue, true);
         mColor = typedValue.data;
+    }
+
+    protected void initLayouts() {
+        mLinearTabLayout = new LinearLayout(getContext());
+        getMasterLayout().addView(
+                mLinearTabLayout,
+                new RelativeLayout.LayoutParams(
+                        RelativeLayout.LayoutParams.MATCH_PARENT,
+                        RelativeLayout.LayoutParams.MATCH_PARENT
+                )
+        );
+
+        mIndicatorView = new View(getContext());
+        mIndicatorView.setBackgroundColor(getAccentColor());
+        mIndicatorView.setOnTouchListener(new OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                return false;
+            }
+        });
+        getMasterLayout().addView(
+                mIndicatorView,
+                new RelativeLayout.LayoutParams(0, 0)
+        );
     }
 
     public void setAccentColor(int color) {
@@ -158,6 +164,10 @@ public abstract class TabLayout extends RelativeLayout {
 
             populateTabStrip();
         }
+    }
+
+    public void setOnPageChangeListener(ViewPager.OnPageChangeListener listener) {
+        mViewPagerPageChangeListener = listener;
     }
 
     protected abstract ViewGroup.LayoutParams createLayoutParams();
@@ -282,7 +292,7 @@ public abstract class TabLayout extends RelativeLayout {
          */
         @Override
         public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
-            int tabCount = getChildCount();
+            int tabCount = mLinearTabLayout.getChildCount();
             if ((tabCount == 0) || (position < 0) || (position >= tabCount)) {
                 return;
             }
