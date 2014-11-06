@@ -9,21 +9,26 @@ import android.graphics.Paint;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.Interpolator;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import android.widget.Scroller;
 import android.widget.TableLayout;
 import android.widget.TextView;
 
+import java.lang.reflect.Field;
 import java.util.LinkedList;
 import java.util.List;
 
 import at.markushi.ui.RevealColorView;
+import at.markushi.ui.util.BakedBezierInterpolator;
 
 /**
  * Created by Davy on 14/11/5.
@@ -139,6 +144,18 @@ public abstract class TabLayout extends RelativeLayout {
         mViewPager = viewPager;
         if (mViewPager != null) { // set listener for sliding pages
             mViewPager.setOnPageChangeListener(new InternalViewPagerListener());
+
+            try {
+                Field mScroller;
+                mScroller = ViewPager.class.getDeclaredField("mScroller");
+                mScroller.setAccessible(true);
+                SwiftScroller scroller = new SwiftScroller(mViewPager.getContext(), BakedBezierInterpolator.getInstance());
+                mScroller.set(mViewPager, scroller);
+            } catch (NoSuchFieldException e) {
+            } catch (IllegalArgumentException e) {
+            } catch (IllegalAccessException e) {
+            }
+
             populateTabStrip();
         }
     }
@@ -196,28 +213,35 @@ public abstract class TabLayout extends RelativeLayout {
         }
     }
 
-    protected void updateIndicator(int position, float offset) {
+    protected void updateIndicator(int leftPosition, int rightPosition, float offset) {
         final int tabCount = mLinearTabLayout.getChildCount();
         final int indicatorHeight = getResources().getDimensionPixelSize(R.dimen.material_tab_indicator_height);
 
         // Thick colored underline below the current selection
         if (tabCount > 0) {
-            View selectedTab = mLinearTabLayout.getChildAt(position);
-            int left = selectedTab.getLeft();
-            int right = selectedTab.getRight();
+            View leftTab = mLinearTabLayout.getChildAt(leftPosition);
+            int indicatorLeft = leftTab.getLeft();
+            int indicatorRight = leftTab.getRight();
 
-            if (offset > 0f && position < (tabCount - 1)) {
-                // Draw the selection partway between the tabs
-                View nextTab = mLinearTabLayout.getChildAt(position + 1);
-                left = (int) (offset * nextTab.getLeft() +
-                        (1.0f - offset) * left);
-                right = (int) (offset * nextTab.getRight() +
-                        (1.0f - offset) * right);
+            if (leftPosition != rightPosition) { // We are moving!
+                View rightTab = mLinearTabLayout.getChildAt(rightPosition);
+                // Use Bezier line to match Lollipop effect
+                float swift = BakedBezierInterpolator.getInstance().getInterpolation(offset);
+                float swiftOut = 1.0f - BakedBezierInterpolator.getInstance().getInterpolation(1.0f - offset);
+                indicatorLeft = Math.max(
+                        (int)(swiftOut * rightTab.getLeft()  + (1.0f - swiftOut) * leftTab.getLeft()),
+                        leftTab.getLeft()
+                );
+                indicatorRight = Math.min(
+                        (int)(swift * rightTab.getRight() + (1.0f - swift) * leftTab.getRight()),
+                        rightTab.getRight()
+                );
             }
 
-            mIndicatorView.setTranslationX(left);
+            mIndicatorView.setTranslationX(indicatorLeft);
             mIndicatorView.setTranslationY(getHeight() - indicatorHeight);
-            mIndicatorView.setLayoutParams(new RelativeLayout.LayoutParams(right - left, indicatorHeight));
+            mIndicatorView.setLayoutParams(new RelativeLayout.LayoutParams(
+                    indicatorRight - indicatorLeft, indicatorHeight));
         } else {
             mIndicatorView.setLayoutParams(new RelativeLayout.LayoutParams(0, 0));
         }
@@ -230,8 +254,32 @@ public abstract class TabLayout extends RelativeLayout {
 
     private class InternalViewPagerListener implements ViewPager.OnPageChangeListener {
         private int mLastPosition;
-        private int mScrollState;
+        private int mLastUpdate;
+        private int mSlidingMode = 0;
 
+        /**
+         * NOTE: We have two method when moving pages.
+         *
+         *   A. Click on tab (setCurrentItem(target)), may roll multiple pages
+         *      status[IDLE] --(Click on tab)--> status[SETTLING] --> onPageSelected(targetPage) -->
+         *      onPageScrolled(current ~ target) --> status[IDLE]
+         *
+         *   B. Sliding through
+         *      status[IDLE] --(Sliding)--> status[DRAGGING] -->
+         *      onPageScrolled(leftPage ~ rightPage) --(Lift hand, non-manually sliding)-->
+         *      status[SETTLING] --> onPageSelected(targetPage) -->
+         *      onPageScrolled(leftPage ~ rightPage) --> status[IDLE]
+         *      ** position in onPageScrolled is keep as leftPage **
+         *
+         * We will set a mode flag to identify out which method we are using for making animate.
+         */
+
+        /**
+         * When ViewPage is scrolling
+         * @param position the order of the left page.
+         * @param positionOffset the progress of the scrolling (must be in range [0,1))
+         * @param positionOffsetPixels abs(the offset (in px) of the left page)
+         */
         @Override
         public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
             int tabCount = getChildCount();
@@ -239,7 +287,27 @@ public abstract class TabLayout extends RelativeLayout {
                 return;
             }
 
-            updateIndicator(position, positionOffset);
+            int left, right;
+            float progress;
+            if (mSlidingMode == 1) { // Manually sliding
+                // 'Cause position will not be changed, we use this to recognize the pages
+                left = position;
+                right = position + 1;
+                progress = positionOffset;
+            }
+            else { // Sliding by setCurrentItem
+                // We use mLastPosition to record the start, and use getCurrentItem to find the end
+                left = mLastPosition;
+                right = mViewPager.getCurrentItem();
+                if (left > right) { // Sliding to the left side. Swipe.
+                    left = right;
+                    right = mLastPosition;
+                }
+                // Calculate the real progress here.
+                progress = ((position - left) * 1.0f + positionOffset) / (right - left);
+            }
+
+            updateIndicator(left, right, progress);
 
             if (mViewPagerPageChangeListener != null) {
                 mViewPagerPageChangeListener.onPageScrolled(
@@ -252,7 +320,20 @@ public abstract class TabLayout extends RelativeLayout {
 
         @Override
         public void onPageScrollStateChanged(int state) {
-            mScrollState = state;
+            switch (state) {
+                case ViewPager.SCROLL_STATE_IDLE:
+                    mSlidingMode = 0;
+                    updateIndicator(mViewPager.getCurrentItem(), mViewPager.getCurrentItem(), 0.0f);
+                    mLastPosition = mViewPager.getCurrentItem();
+                    break;
+                case ViewPager.SCROLL_STATE_DRAGGING:
+                    mSlidingMode = 1; // Manually sliding
+                    break;
+                case ViewPager.SCROLL_STATE_SETTLING:
+                    if (mSlidingMode == 0) // Using setCurrentItem
+                        mSlidingMode = 2;
+                    break;
+            }
 
             if (mViewPagerPageChangeListener != null) {
                 mViewPagerPageChangeListener.onPageScrollStateChanged(state);
@@ -261,13 +342,9 @@ public abstract class TabLayout extends RelativeLayout {
 
         @Override
         public void onPageSelected(int position) {
-            if (mScrollState == ViewPager.SCROLL_STATE_IDLE) {
-                updateIndicator(position, 0.0f);
-            }
-
-            updateTabStyle(mLastPosition);
+            updateTabStyle(mLastUpdate);
             updateTabStyle(position);
-            mLastPosition = position;
+            mLastUpdate = position;
 
             if (mViewPagerPageChangeListener != null) {
                 mViewPagerPageChangeListener.onPageSelected(position);
@@ -299,6 +376,33 @@ public abstract class TabLayout extends RelativeLayout {
             } else {
                 throw new RuntimeException("Cannot active not contained tab.");
             }
+        }
+    }
+
+    public class SwiftScroller extends Scroller {
+
+        private int mDuration = 500;
+
+        public SwiftScroller(Context context) {
+            super(context);
+        }
+
+        public SwiftScroller(Context context, Interpolator interpolator) {
+            super(context, interpolator);
+        }
+
+        public SwiftScroller(Context context, Interpolator interpolator, boolean flywheel) {
+            super(context, interpolator, flywheel);
+        }
+
+        @Override
+        public void startScroll(int startX, int startY, int dx, int dy, int duration) {
+            super.startScroll(startX, startY, dx, dy, mDuration);
+        }
+
+        @Override
+        public void startScroll(int startX, int startY, int dx, int dy) {
+            super.startScroll(startX, startY, dx, dy, mDuration);
         }
     }
 }
